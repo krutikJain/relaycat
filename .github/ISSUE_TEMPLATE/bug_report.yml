@@ -1,0 +1,25 @@
+name: Bug report
+description: Something isn't working
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Screenshots help.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: macOS version
+      placeholder: macOS 15.3
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Relaycat version
+      description: Relaycat menu, About Relaycat
+  - type: textarea
+    attributes:
+      label: Output of `Relaycat --status`
+      description: Run `/Applications/Relaycat.app/Contents/MacOS/Relaycat --status`. Remove email addresses before pasting.
+      render: text

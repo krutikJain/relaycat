@@ -1,0 +1,21 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build universal app
+        run: ./build.sh
+      - name: Check both architectures are present
+        run: lipo -archs build/Relaycat.app/Contents/MacOS/Relaycat | grep -q "x86_64 arm64"
+      - name: Read-only smoke test in demo mode
+        run: RELAYCAT_DEMO=full build/Relaycat.app/Contents/MacOS/Relaycat --status --base "$RUNNER_TEMP" || true

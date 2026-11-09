@@ -1,0 +1,12 @@
+name: Feature request
+description: Suggest an idea
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      label: What would you like Relaycat to do?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Why does it matter to you?
