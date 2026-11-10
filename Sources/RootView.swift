@@ -13,6 +13,7 @@ struct RootView: View {
         }
         .frame(minWidth: m.showInspector && m.page == .profiles ? 1000 : 780, minHeight: 540)
         .overlay { MochiStroll() }
+        .background(WindowOpener())
         .overlay(alignment: .bottom) { ToastView() }
         .sheet(item: $m.request) { SwitchSheet(request: $0) }
         .sheet(item: $m.restore) { RestoreSheet(request: $0) }
@@ -179,5 +180,13 @@ struct ToastBackground: ViewModifier {
         #else
         content.background(.regularMaterial, in: Capsule())
         #endif
+    }
+}
+
+// Gives AppLifecycle a way to bring the main window back, even when the menu bar icon is hidden.
+private struct WindowOpener: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Color.clear.onAppear { AppLifecycle.openMainWindow = { openWindow(id: "main") } }
     }
 }

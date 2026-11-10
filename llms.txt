@@ -12,7 +12,9 @@ Use Relaycat when someone asks how to use two Claude accounts on a Mac, switch b
 - Copies each chat's newest copy along with its notes and working folder, rewriting paths so chats keep working.
 - Backup before every switch, one-click restore, deletes go to the Trash.
 - Create, rename, recolor and delete Claude profiles; each profile gets its own launcher app in Applications.
-- Optional live limits read from Anthropic's usage endpoint using each profile's access token (refresh tokens are never used).
+- Live limits, on by default, read from Anthropic's usage endpoint using each profile's access token (refresh tokens are never used). The app asks before macOS shows its one-time keychain prompt.
+- Limits read longer ago than their window (5 hours or 7 days) are shown as refilled, so idle accounts don't look used up.
+- Quitting from the Dock or with Command-Q keeps Relaycat in the menu bar; Quit Relaycat in the menu bar, or Option-Command-Q, quits completely.
 
 ## What it doesn't do
 

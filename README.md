@@ -127,10 +127,12 @@ xattr -dr com.apple.quarantine /Applications/Relaycat.app
 2. Press **New profile** to add a second account. It opens in its own window so you can sign in.
 3. When one account runs low, press **Switch** on another.
 
-Optional, both asked for only when you turn them on:
+Two permissions, each asked for with a card in the app before macOS shows its own prompt:
 
-- **Live limits** read each account's limits straight from Anthropic. macOS asks once to let Relaycat use "Claude Safe Storage". Choose **Always Allow**.
+- **Live limits** are on from the start. They read each account's limits straight from Anthropic, so a card asks you to allow "Claude Safe Storage" once. Press **Allow…** and choose **Always Allow**. Press **Not now** to keep the limits Claude recorded instead, or turn live limits off in Settings.
 - **Accessibility** lets Relaycat press "Quit anyway" when Claude asks before closing. Without it, Relaycat waits a few seconds and closes Claude itself.
+
+Quitting from the Dock or with ⌘Q keeps Relaycat in the menu bar. To quit completely, choose **Quit Relaycat** in the menu bar or press ⌥⌘Q. You can change this in Settings.
 
 <details>
 <summary><strong>What you'll see before you have any profiles</strong></summary>
@@ -148,7 +150,7 @@ Claude for Mac keeps each profile in its own folder under `~/Library/Application
 | What you see | Where it comes from |
 | --- | --- |
 | Email and plan | The account record Claude caches in the profile's IndexedDB |
-| Limits | Anthropic's usage endpoint (live limits on), or what Claude recorded while it was open |
+| Limits | Anthropic's usage endpoint (live limits), or what Claude recorded while it was open. Numbers older than their window, such as a session read more than 5 hours ago, count as refilled. |
 | Chats | The chat records in `claude-code-sessions` |
 | Profile apps | Small launchers in Applications that open Claude with the right folder |
 
@@ -177,7 +179,7 @@ Yes. Each profile is a separate Claude for Mac instance with its own sign-in, so
 <details>
 <summary><strong>How do I see the usage limits of all my Claude accounts?</strong></summary>
 <br />
-Relaycat lists every account with its 5-hour session limit, its weekly limit and when each resets. Turn on live limits in Settings to read them straight from Anthropic. The menu bar shows the account you're using, and the account with the most left is marked so you know where to switch.
+Relaycat lists every account with its 5-hour session limit, its weekly limit and when each resets. Live limits read them straight from Anthropic, and an account you haven't opened in a while shows as full again once its window has passed. The menu bar shows the account you're using, and the account with the most left is marked so you know where to switch.
 </details>
 
 <details>
@@ -207,7 +209,7 @@ Claude has to close to switch. If a chat was busy in the last few minutes, the s
 <details>
 <summary><strong>Why does macOS ask about "Claude Safe Storage"?</strong></summary>
 <br />
-That's the keychain item Claude uses to encrypt its saved logins. Relaycat needs it to read each profile's access token for live limits. It's only asked for if you turn live limits on. Choose Always Allow so it doesn't ask again.
+That's the keychain item Claude uses to encrypt its saved logins. Relaycat needs it to read each profile's access token for live limits, and only asks macOS for it after you press Allow in the app. Choose Always Allow so it doesn't ask again. Builds aren't signed with an Apple Developer ID yet, so macOS may ask once more after you update Relaycat.
 </details>
 
 <details>

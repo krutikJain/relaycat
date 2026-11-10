@@ -27,6 +27,7 @@ There's no test target yet, so please check by hand, and say what you checked in
 - Try it in demo mode first.
 - Don't try changes that write files (switch, restore, rename, delete) on your real profiles until you have a backup of them.
 - Look at the window at its smallest size and at a large size, in light and dark.
+- If you touch quitting or the menu bar, try Quit from the Dock, ⌘Q, ⌥⌘Q and Quit Relaycat in the menu bar.
 
 ## Ground rules
 

@@ -109,7 +109,12 @@ struct Snapshot {
         return pool.max { a, b in
             let ra = a.roomLeft ?? 0, rb = b.roomLeft ?? 0
             if ra != rb { return ra < rb }
-            return (a.usage?.week?.leftPct ?? 0) < (b.usage?.week?.leftPct ?? 0)
+            let wa = a.usage?.week?.leftPct ?? 0, wb = b.usage?.week?.leftPct ?? 0
+            if wa != wb { return wa < wb }
+            // On a tie, trust measured numbers over ones that only refilled on paper, then the freshest.
+            let ga = a.usage?.week?.probablyReset == true, gb = b.usage?.week?.probablyReset == true
+            if ga != gb { return ga }
+            return (a.usage?.takenAt ?? .distantPast) < (b.usage?.takenAt ?? .distantPast)
         }
     }
 

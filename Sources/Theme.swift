@@ -28,8 +28,8 @@ enum Fmt {
     }
 
     static func resets(_ w: UsageWindow) -> String {
+        if w.probablyReset { return w.resetsAt.map { "Full again since \(when($0))" } ?? "Full again" }
         guard let r = w.resetsAt else { return "" }
-        if w.probablyReset { return "Full again since \(r.formatted(date: .omitted, time: .shortened))" }
         let left = r.timeIntervalSinceNow
         if left < 3600 { return "Resets in \(max(1, Int(left / 60))) min" }
         if left < 6 * 3600 { return "Resets in \(Int(left / 3600)) h \(Int(left.truncatingRemainder(dividingBy: 3600) / 60)) min" }

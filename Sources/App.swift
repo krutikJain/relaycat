@@ -23,8 +23,10 @@ struct Entry {
 }
 
 struct RelaycatApp: App {
+    @NSApplicationDelegateAdaptor(AppLifecycle.self) private var lifecycle
     @StateObject private var model = AppModel.shared
     @AppStorage("showMenuBar") private var showMenuBar = true
+    @AppStorage("keepInMenuBar") private var keepInMenuBar = true
 
     var body: some Scene {
         Window("Relaycat", id: "main") {
@@ -33,6 +35,14 @@ struct RelaycatApp: App {
         }
         .defaultSize(width: 1240, height: 780)
         .commands {
+            CommandGroup(replacing: .appTermination) {
+                Button("Quit Relaycat") { NSApp.terminate(nil) }
+                    .keyboardShortcut("q")
+                if showMenuBar && keepInMenuBar {
+                    Button("Quit Relaycat Completely") { AppLifecycle.quitCompletely() }
+                        .keyboardShortcut("q", modifiers: [.command, .option])
+                }
+            }
             CommandGroup(after: .toolbar) {
                 Button("Check again") { model.refresh() }.keyboardShortcut("r")
                 Divider()
@@ -59,6 +69,7 @@ struct RelaycatApp: App {
 struct SettingsView: View {
     @EnvironmentObject var m: AppModel
     @AppStorage("showMenuBar") private var showMenuBar = true
+    @AppStorage("keepInMenuBar") private var keepInMenuBar = true
     @AppStorage("mochiWanders") private var mochiWanders = true
 
     var body: some View {
@@ -90,15 +101,34 @@ struct SettingsView: View {
 
             Section("Switching") {
                 Toggle("Open the profile after switching", isOn: $m.openAfterSwitch)
-                Toggle("Show Relaycat in the menu bar", isOn: $showMenuBar)
                 Toggle("Let Mochi wander around now and then", isOn: $mochiWanders)
+            }
+
+            Section {
+                Toggle("Show Relaycat in the menu bar", isOn: $showMenuBar)
+                    .onChange(of: showMenuBar) { _, on in
+                        if !on && AppLifecycle.isInMenuBarOnly { AppLifecycle.showMainWindow() }
+                    }
+                Toggle("Keep running in the menu bar after you quit", isOn: $keepInMenuBar)
+                    .disabled(!showMenuBar)
+            } header: {
+                Text("Menu bar")
+            } footer: {
+                Text(showMenuBar && keepInMenuBar
+                     ? "Quitting from the Dock or with ⌘Q closes the window and keeps your limits in the menu bar. To quit completely, choose Quit Relaycat in the menu bar."
+                     : "Quitting closes Relaycat completely.")
+                    .foregroundStyle(.secondary)
             }
 
             Section {
                 Toggle("Get live limits from Anthropic", isOn: Binding(get: { m.liveLimits }, set: { on in
                     if on { m.turnOnLiveLimits() } else { m.liveLimits = false }
                 }))
-                if m.liveLimits {
+                if m.liveLimits && m.limitsNeedPermission {
+                    LabeledContent("Waiting for your OK") {
+                        Button("Allow…") { m.refreshLimits(force: true, allowPrompt: true) }
+                    }
+                } else if m.liveLimits {
                     LabeledContent("Last checked") {
                         HStack(spacing: 8) {
                             Text(m.snap?.limitsCheckedAt.map { Fmt.ago($0) } ?? "Not yet")

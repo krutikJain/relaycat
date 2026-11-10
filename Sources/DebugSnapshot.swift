@@ -6,6 +6,7 @@ import ScreenCaptureKit
 enum DebugSnapshot {
     @MainActor static func startIfRequested(_ m: AppModel) {
         let env = ProcessInfo.processInfo.environment
+        if env["RELAYCAT_LIMITS_ASK"] != nil { m.limitsNeedPermission = true }
         if let look = env["RELAYCAT_APPEARANCE"] {
             NSApp.appearance = NSAppearance(named: look == "light" ? .aqua : .darkAqua)
         }
@@ -41,7 +42,7 @@ enum DebugSnapshot {
                         }
                     }
                     print("drag done")
-                    NSApp.terminate(nil)
+                    AppLifecycle.quitCompletely()
                 }
             }
             return
@@ -64,7 +65,7 @@ enum DebugSnapshot {
                         }
                         if tick == 60 { m.showInspector.toggle() }
                         if tick == 400 { m.showInspector.toggle() }
-                        if tick > 900 { t.invalidate(); print("stress done"); NSApp.terminate(nil) }
+                        if tick > 900 { t.invalidate(); print("stress done"); AppLifecycle.quitCompletely() }
                     }
                 }
             }
@@ -84,7 +85,7 @@ enum DebugSnapshot {
             func run(_ i: Int) {
                 if i >= sizes.count {
                     try? log.write(toFile: dir + "/frames.txt", atomically: true, encoding: .utf8)
-                    NSApp.terminate(nil); return
+                    AppLifecycle.quitCompletely(); return
                 }
                 let (name, w, h, insp, page) = sizes[i]
                 m.sidebar = .page(page)
@@ -169,7 +170,7 @@ enum DebugSnapshot {
                         }
                     }
                     try? out.write(toFile: dir + "/windows.txt", atomically: true, encoding: .utf8)
-                    NSApp.terminate(nil)
+                    AppLifecycle.quitCompletely()
                 }
             }
             return
@@ -186,7 +187,7 @@ enum DebugSnapshot {
                             try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "\(dir)/icon_\(name).png"))
                         }
                     }
-                    NSApp.terminate(nil)
+                    AppLifecycle.quitCompletely()
                 }
             }
             return
@@ -224,7 +225,7 @@ enum DebugSnapshot {
                             try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "\(dir)/mochi-\(name).png"))
                         }
                     }
-                    NSApp.terminate(nil)
+                    AppLifecycle.quitCompletely()
                 }
             }
             return
@@ -247,7 +248,7 @@ enum DebugSnapshot {
                     try? out.write(toFile: dir + "/tree.txt", atomically: true, encoding: .utf8)
                     try? await Task.sleep(for: .seconds(4))
                     await capture(dir: dir, name: "peek-b")
-                    NSApp.terminate(nil)
+                    AppLifecycle.quitCompletely()
                 }
             }
             return
@@ -268,7 +269,7 @@ enum DebugSnapshot {
                 if let p = snap.profiles.dropFirst().first { save(ProfileRow(p: p, snap: snap).padding(10), "row", 820) }
                 save(MenuBarPanel(), "menu", 330)
                 save(VStack { ForEach(snap.profiles) { p in HStack { Avatar(p: p, size: 20); Text(p.displayName); Spacer(); Text("\(Int(p.usage?.week?.leftPct ?? 0))%") } } }.padding(), "sidebar-rows", 220)
-                NSApp.terminate(nil)
+                AppLifecycle.quitCompletely()
             }
             return
         }
@@ -282,7 +283,7 @@ enum DebugSnapshot {
         steps.append(("take-over", { m.creating = false; m.takingOver = true }))
         steps.append(("settings", { m.takingOver = false; NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) }))
         func run(_ i: Int) {
-            if i >= steps.count { NSApp.terminate(nil); return }
+            if i >= steps.count { AppLifecycle.quitCompletely(); return }
             steps[i].1()
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
                 Task { @MainActor in

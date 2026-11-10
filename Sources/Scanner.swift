@@ -261,13 +261,30 @@ final class Scanner {
                 i.week = UsageWindow(usedPct: sd, resetsAt: reset)
                 if let r = reset, r < now { i.week?.probablyReset = true; i.week?.usedPct = 0 }
             }
-            if now.timeIntervalSince(last.t) > 7 * 86400, i.week?.resetsAt == nil { i.week?.probablyReset = true; i.week?.usedPct = 0 }
-            if now.timeIntervalSince(last.t) > 5 * 3600, i.fiveHour?.resetsAt == nil { i.fiveHour?.probablyReset = true; i.fiveHour?.usedPct = 0 }
             i.takenAt = last.t; i.source = "the Claude app"
             info = i
         }
         if let p = live?.problem, info != nil { info?.note = p }
+        if var i = info, let at = i.takenAt {
+            i.fiveHour = Self.settle(i.fiveHour, takenAt: at, length: 5 * 3600, now: now)
+            i.week = Self.settle(i.week, takenAt: at, length: 7 * 86400, now: now)
+            i.fable = Self.settle(i.fable, takenAt: at, length: 7 * 86400, now: now)
+            info = i
+        }
         return info
+    }
+
+    // Numbers can be old: a profile that hasn't been open for days, or limits imported from elsewhere.
+    // A window can't outlast its own length, so anything read longer ago than that has refilled.
+    static func settle(_ window: UsageWindow?, takenAt: Date, length: TimeInterval, now: Date) -> UsageWindow? {
+        guard var w = window else { return nil }
+        if let r = w.resetsAt, r > takenAt.addingTimeInterval(length + 3600) { w.resetsAt = nil }
+        if let r = w.resetsAt {
+            if r <= now { w.usedPct = 0; w.probablyReset = true }
+        } else if now.timeIntervalSince(takenAt) > length {
+            w.usedPct = 0; w.probablyReset = true
+        }
+        return w
     }
 
     // MARK: Accounts from IndexedDB

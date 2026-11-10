@@ -68,7 +68,9 @@ final class AppModel: ObservableObject {
     @AppStorage("openAfterSwitch") var openAfterSwitch = true
     @AppStorage("quitPolicy") var quitPolicyRaw = QuitPolicy.quitAnyway.rawValue
     @AppStorage("hideAccessNotice") var hideAccessNotice = false
-    @AppStorage("liveLimits") var liveLimits = false
+    @AppStorage("liveLimits") var liveLimits = true
+    @AppStorage("hideLimitsNotice") var hideLimitsNotice = false
+    @Published var limitsNeedPermission = false
     @AppStorage("hideGraftNotice") var hideGraftNotice = false
 
     private var scanning = false
@@ -127,7 +129,7 @@ final class AppModel: ObservableObject {
         cfg.createsNewApplicationInstance = true
         cfg.activates = true
         NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: cfg) { _, _ in
-            DispatchQueue.main.async { NSApp.terminate(nil) }
+            DispatchQueue.main.async { AppLifecycle.quitCompletely() }
         }
     }
 
@@ -144,8 +146,11 @@ final class AppModel: ObservableObject {
         let profiles = snap.profiles, dir = scanner.settingsDir
         Task.detached(priority: .utility) {
             _ = UsageService.refresh(profiles: profiles, settingsDir: dir, force: force, allowPrompt: allowPrompt)
+            let needs = UsageService.needsPermission
             await MainActor.run {
                 self.checkingLimits = false
+                if self.limitsNeedPermission != needs { withAnimation(.smooth) { self.limitsNeedPermission = needs } }
+                if allowPrompt && !needs { self.hideLimitsNotice = false }
                 self.refresh()
             }
         }

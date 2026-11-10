@@ -187,7 +187,7 @@ struct LiveMochi: View {
             // Redraws only when something changes: twice per blink, or a few steps a second for the z's.
             TimelineView(MochiSchedule(napping: mood == .napping)) { tl in
                 let t = tl.date.timeIntervalSinceReferenceDate
-                let blink: CGFloat = t.truncatingRemainder(dividingBy: MochiSchedule.cycle) < MochiSchedule.closed ? 0.1 : 1
+                let blink: CGFloat = MochiSchedule.isBlinking(at: tl.date) ? 0.1 : 1
                 let z = (t.truncatingRemainder(dividingBy: 2.4)) / 2.4
                 MochiFace(mood: mood, size: size, blink: mood == .napping ? 1 : blink, zPhase: z)
             }
@@ -199,18 +199,35 @@ struct MochiSchedule: TimelineSchedule {
     static let cycle = 4.2, closed = 0.14, zStep = 0.4
     var napping: Bool
 
+    // Blink state comes from the cycle number, not from a remainder, so rounding can't leave the eyes shut.
+    static func isBlinking(at date: Date) -> Bool {
+        let t = date.timeIntervalSinceReferenceDate
+        return t - (t / cycle).rounded(.down) * cycle < closed
+    }
+
     func entries(from start: Date, mode: TimelineScheduleMode) -> AnyIterator<Date> {
-        var next = start.timeIntervalSinceReferenceDate
         let napping = napping, step = mode == .lowFrequency ? 1.0 : Self.zStep
-        return AnyIterator {
-            let now = next
-            if napping {
-                next = (now / step).rounded(.down) * step + step
-            } else {
-                let c = (now / Self.cycle).rounded(.down) * Self.cycle
-                next = now < c + Self.closed ? c + Self.closed : c + Self.cycle
+        let t0 = start.timeIntervalSinceReferenceDate
+        if napping {
+            var k = (t0 / step).rounded(.down)
+            return AnyIterator {
+                defer { k += 1 }
+                return Date(timeIntervalSinceReferenceDate: max(t0, k * step))
             }
-            return Date(timeIntervalSinceReferenceDate: now)
+        }
+        // Two entries per cycle, each well inside its phase: eyes closed just after the cycle starts,
+        // open again a little after the blink ends.
+        var k = (t0 / Self.cycle).rounded(.down), closing = Self.isBlinking(at: start)
+        var first = true
+        return AnyIterator {
+            if first { first = false; return start }
+            if closing {
+                closing = false
+                return Date(timeIntervalSinceReferenceDate: k * Self.cycle + Self.closed + 0.02)
+            }
+            k += 1
+            closing = true
+            return Date(timeIntervalSinceReferenceDate: k * Self.cycle + 0.01)
         }
     }
 }

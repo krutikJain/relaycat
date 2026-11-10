@@ -86,6 +86,8 @@ enum UsageService {
 
     private static var cachedKey: Data?
     private static let keyLock = NSLock()
+    // True when reading "Claude Safe Storage" needs the user to allow it in the macOS prompt first.
+    nonisolated(unsafe) static var needsPermission = false
 
     static func safeStorageKey(allowPrompt: Bool) throws -> Data {
         keyLock.lock(); defer { keyLock.unlock() }
@@ -104,9 +106,10 @@ enum UsageService {
         defer { if !allowPrompt { SecKeychainSetUserInteractionAllowed(true) } }
         var out: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &out)
+        needsPermission = status != errSecSuccess && status != errSecItemNotFound
         guard status == errSecSuccess, let pw = out as? Data else {
             if !allowPrompt && status != errSecItemNotFound {
-                throw Problem.noKeychain("Live limits need your OK once. Turn them on in Settings and choose Always Allow.")
+                throw Problem.noKeychain("Live limits need your OK once. Press Allow in Relaycat, then choose Always Allow.")
             }
             switch status {
             case errSecUserCanceled, errSecAuthFailed:

@@ -79,6 +79,15 @@ struct ProfilesPage: View {
             }
             .transition(.move(edge: .top).combined(with: .opacity))
         }
+        if m.liveLimits && m.limitsNeedPermission && !m.hideLimitsNotice {
+            Notice(icon: "gauge.with.dots.needle.67percent", title: "See live limits for every account",
+                   message: "Relaycat asks Anthropic for each account's session and weekly limits, using the login Claude already saved. macOS asks once to let Relaycat use “Claude Safe Storage”. Choose Always Allow.",
+                   onClose: { withAnimation(.smooth) { m.hideLimitsNotice = true } }) {
+                Button("Allow…") { m.refreshLimits(force: true, allowPrompt: true) }.primaryAction()
+                Button("Not now") { withAnimation(.smooth) { m.hideLimitsNotice = true } }.buttonStyle(.link).font(.callout)
+            }
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
         if !m.hasAccess && m.quitPolicy == .quitAnyway && !m.hideAccessNotice {
             Notice(icon: "hand.raised.fill", tint: .orange, title: "Let Relaycat answer “Quit anyway?”",
                    message: "Claude sometimes asks before it closes. With Accessibility access, Relaycat answers for you instead of closing Claude by force.",

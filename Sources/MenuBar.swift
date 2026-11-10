@@ -33,7 +33,7 @@ struct MenuBarPanel: View {
             HStack {
                 Button("Open Relaycat") { show() }
                 Spacer()
-                Button("Quit") { NSApp.terminate(nil) }
+                Button("Quit Relaycat") { AppLifecycle.quitCompletely() }
             }
             .buttonStyle(.borderless)
             .padding(.horizontal, 14).padding(.vertical, 10)
@@ -71,9 +71,8 @@ struct MenuBarPanel: View {
                 }
             }
             LimitBar(window: w, height: 5)
-            if let w, let r = w.resetsAt {
-                Text(w.probablyReset ? "Full again since \(r.formatted(date: .omitted, time: .shortened))"
-                                     : "Back to full \(Fmt.when(r))")
+            if let w, w.probablyReset || w.resetsAt != nil {
+                Text(w.probablyReset ? Fmt.resets(w) : "Back to full \(Fmt.when(w.resetsAt!))")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -105,8 +104,8 @@ struct MenuBarPanel: View {
     }
 
     func show() {
-        openWindow(id: "main")
-        NSApp.activate(ignoringOtherApps: true)
+        if AppLifecycle.openMainWindow == nil { AppLifecycle.openMainWindow = { openWindow(id: "main") } }
+        AppLifecycle.showMainWindow()
     }
 
     func go(_ p: Profile) {
@@ -119,10 +118,12 @@ struct MenuBarPanel: View {
 
 struct MenuBarLabel: View {
     @EnvironmentObject var m: AppModel
+    @Environment(\.openWindow) private var openWindow
     var body: some View {
         let st = MenuBarIcon.state(for: m.snap?.runningProfiles.first)
         Image(nsImage: MenuBarIcon.image(st))
             .accessibilityLabel(st.spoken)
+            .onAppear { AppLifecycle.openMainWindow = { openWindow(id: "main") } }
     }
 }
 
@@ -143,13 +144,15 @@ enum MenuBarIcon {
     static func state(for p: Profile?, now: Date = Date()) -> IndicatorState {
         guard let p else { return IndicatorState(kind: .idle, spoken: "No Claude open") }
         let session = p.usage?.fiveHour, week = p.usage?.week
+        // Without a reset time, the window refills no later than its length after the numbers were read.
+        let taken = p.usage?.takenAt
         if let w = week, w.leftPct < 1 {
-            let (prog, text) = countdown(to: w.resetsAt, window: 7 * 86400, now: now, dayStyle: true)
+            let (prog, text) = countdown(to: w.resetsAt ?? taken?.addingTimeInterval(7 * 86400), window: 7 * 86400, now: now, dayStyle: true)
             return IndicatorState(kind: .weekOut(progress: prog, text: text),
                                   spoken: "\(p.displayName): this week is used up, back \(text)")
         }
         if let s = session, s.leftPct < 1 {
-            let (prog, text) = countdown(to: s.resetsAt, window: 5 * 3600, now: now, dayStyle: false)
+            let (prog, text) = countdown(to: s.resetsAt ?? taken?.addingTimeInterval(5 * 3600), window: 5 * 3600, now: now, dayStyle: false)
             return IndicatorState(kind: .recharging(progress: prog, text: text),
                                   spoken: "\(p.displayName): session used up, back in \(text)")
         }
