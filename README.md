@@ -77,7 +77,7 @@ Relaycat does that in one click. It closes the Claude that's open, copies the ne
   <img src="docs/images/menubar-light.png" alt="Relaycat menu bar indicator showing Claude session usage, a recharge countdown and weekly limit states" width="760" />
 </picture>
 
-Bars and a percentage show the current session. When the session is used up the bars empty and refill as the reset gets closer, next to a countdown. When the week is used up too it turns red and shows the day it comes back. Click it for both limits and a list of profiles to switch to.
+Bars and a percentage show the current session. When the session is used up the bars empty and refill as the reset gets closer, next to a countdown. When the week is used up too it turns red and shows the day it comes back. Click it for both limits and a list of profiles. Click a profile to switch right there: the panel shows which Claude closes and how many chats come along, then the progress, without opening the Relaycat window. Click the profile that's already open to bring that Claude to the front.
 
 ### Meet Mochi
 
@@ -86,7 +86,7 @@ Bars and a percentage show the current session. When the session is used up the 
   <img src="docs/images/mochi-light.png" alt="Mochi the cat: ready, getting tired, napping, and happy after a switch" width="668" />
 </picture>
 
-Mochi keeps an eye on the account you're using. Ready while there's plenty left, sleepy when the session runs low, napping once it's used up, and thrilled when a switch finishes. Every now and then Mochi strolls across the bottom of the window. If you'd rather not have company, turn it off in Settings.
+Mochi keeps an eye on the account you're using: ready while there's plenty left, sleepy when the session runs low, napping once it's used up, and thrilled when a switch finishes. Every few seconds Mochi does one small thing, like a blink, a glance, an ear twitch, a head tilt or a yawn, then holds still, so it costs next to nothing and stops entirely when the window isn't in front. Now and then Mochi strolls across the bottom of the window and sits down to look at you. Turn that off in Settings, and Reduce Motion keeps Mochi still.
 
 ## Ways to use two Claude accounts on a Mac
 

@@ -192,6 +192,39 @@ enum DebugSnapshot {
             }
             return
         }
+        if let dir = env["RELAYCAT_POSES"] {
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    func pose(_ f: (inout MochiPose) -> Void) -> MochiPose { var p = MochiPose(); f(&p); return p }
+                    let faces: [(String, MochiMood, MochiPose)] = [
+                        ("rest", .ready, MochiPose()), ("look left", .ready, pose { $0.look = -1 }), ("look right", .ready, pose { $0.look = 1 }),
+                        ("look down", .ready, pose { $0.lookY = 0.9 }), ("ear twitch", .ready, pose { $0.earR = 11 }), ("tilt", .ready, pose { $0.tilt = 7 }),
+                        ("blink", .ready, pose { $0.blink = 0.1 }), ("yawn", .tired, pose { $0.yawn = 1; $0.blink = 0.1 }),
+                        ("twinkle", .happy, pose { $0.twinkle = 0.55 }), ("breathe", .napping, pose { $0.breathe = 1; $0.z = 0.5 })]
+                    let sheet = VStack(alignment: .leading, spacing: 18) {
+                        HStack(spacing: 18) {
+                            ForEach(Array(faces.enumerated()), id: \.offset) { _, f in
+                                VStack(spacing: 6) { MochiFace(mood: f.1, size: 84, pose: f.2); Text(f.0).font(.caption).foregroundStyle(.secondary) }
+                            }
+                        }
+                        HStack(spacing: 30) {
+                            ForEach([0.0, 0.07, 0.14, 0.21], id: \.self) { t in MochiWalker(walking: false, size: 96).walker(t: t).frame(width: 96, height: 96) }
+                            MochiWalker(walking: false, size: 96)
+                        }
+                    }
+                    .padding(24)
+                    for (name, scheme, bg) in [("light", ColorScheme.light, Color.white), ("dark", ColorScheme.dark, Color(white: 0.12))] {
+                        let r = ImageRenderer(content: sheet.background(bg).environment(\.colorScheme, scheme))
+                        r.scale = 2
+                        if let img = r.nsImage, let t = img.tiffRepresentation, let rep = NSBitmapImageRep(data: t) {
+                            try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "\(dir)/poses-\(name).png"))
+                        }
+                    }
+                    AppLifecycle.quitCompletely()
+                }
+            }
+            return
+        }
         if let dir = env["RELAYCAT_MOCHI"] {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
@@ -268,6 +301,16 @@ enum DebugSnapshot {
                 if let p = snap.profile(m.selected ?? "Claude") { save(InspectorView(p: p, snap: snap, scrolls: false), "inspector", 330) }
                 if let p = snap.profiles.dropFirst().first { save(ProfileRow(p: p, snap: snap).padding(10), "row", 820) }
                 save(MenuBarPanel(), "menu", 330)
+                if let target = snap.profiles.first(where: { !$0.running })?.folder {
+                    m.toggleQuickSwitch(target); save(MenuBarPanel(), "menu-confirm", 330)
+                    m.quickSwitch?.phase = .running; m.quickSwitch?.step = .copy; m.quickSwitch?.text = "Copying 4 chats…"
+                    save(MenuBarPanel(), "menu-running", 330)
+                    m.quickSwitch?.phase = .done; m.quickSwitch?.step = nil; m.quickSwitch?.text = "Switched. Personal is open. Brought 4 chats along."
+                    save(MenuBarPanel(), "menu-done", 330)
+                    m.quickSwitch?.phase = .failed; m.quickSwitch?.text = "Claude didn't close in time, so nothing was copied."
+                    save(MenuBarPanel(), "menu-failed", 330)
+                    m.quickSwitch = nil
+                }
                 save(VStack { ForEach(snap.profiles) { p in HStack { Avatar(p: p, size: 20); Text(p.displayName); Spacer(); Text("\(Int(p.usage?.week?.leftPct ?? 0))%") } } }.padding(), "sidebar-rows", 220)
                 AppLifecycle.quitCompletely()
             }

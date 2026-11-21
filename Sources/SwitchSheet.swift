@@ -313,60 +313,37 @@ struct SwitchSheet: View {
 
     func start() {
         if m.isDemo { simulate(); return }
-        let scanner = m.scanner, target = request.target, mode = self.mode
-        let opts = SyncOptions(quitOthers: true, openAfter: openAfter)
         m.openAfterSwitch = openAfter
-        let sourceName: String = {
-            if case .profile(let f) = mode { return m.snap?.profile(f)?.displayName ?? f }
-            return "wherever newest"
-        }()
-        m.working = true
         Haptic.tick()
         withAnimation { phase = .running; current = .close }
-        Task.detached {
-            do {
-                let r = try SyncEngine.run(scanner: scanner, target: target, mode: mode, options: opts) { step, text in
-                    Task { @MainActor in
-                        withAnimation(.smooth) { current = step; liveText[step] = text }
-                    }
-                }
-                await MainActor.run {
-                    var closeText: String? = nil
-                    if !r.quit.answeredPrompt.isEmpty { closeText = "Answered “Quit anyway” for \(Fmt.list(r.quit.answeredPrompt))." }
-                    else if !r.quit.forced.isEmpty { closeText = "Closed \(Fmt.list(r.quit.forced)) by force." }
-                    else if !r.quit.closed.isEmpty { closeText = "Closed \(Fmt.list(r.quit.closed))." }
-                    if let closeText { liveText[.close] = closeText }
-                    liveText[.backup] = r.backup.map { "Saved as \($0.lastPathComponent)." }
-                    liveText[.copy] = r.plan.copies.isEmpty ? "Nothing needed copying." : "Copied \(Fmt.plural(r.plan.copies.count, "chat")). \(r.plan.targetName) has \(r.plan.totalAfter) now."
-                    if r.opened { liveText[.open] = r.openedRunning ? "\(r.plan.targetName) is open." : "Starting up. Give it a few seconds." }
-                    result = r
-                    withAnimation(.spring(duration: 0.45, bounce: 0.3)) { phase = .done }
-                    Haptic.done()
-                    m.working = false
-                    m.addHistory(HistoryEntry(date: Date(), kind: "switch", target: r.plan.targetName, source: sourceName,
-                                              added: r.plan.added, updated: r.plan.updated, notes: r.plan.notes.count,
-                                              quit: r.quit.closed, backup: r.backup?.path, ok: true,
-                                              message: r.quit.forced.isEmpty ? "" : "Closed \(Fmt.list(r.quit.forced)) by force"))
-                    m.refresh()
-                }
-            } catch {
-                await MainActor.run {
-                    failure = error.localizedDescription
-                    withAnimation { phase = .failed }
-                    m.working = false
-                    m.addHistory(HistoryEntry(date: Date(), kind: "switch", target: m.snap?.profile(target)?.displayName ?? target,
-                                              source: sourceName, added: 0, updated: 0, notes: 0, quit: [], backup: nil,
-                                              ok: false, message: error.localizedDescription))
-                    m.refresh()
-                }
-            }
-        }
+        m.performSwitch(target: request.target, mode: mode, openAfter: openAfter,
+                        onStep: { step, text in withAnimation(.smooth) { current = step; liveText[step] = text } },
+                        onFinish: { outcome in
+                            switch outcome {
+                            case .success(let r):
+                                var closeText: String? = nil
+                                if !r.quit.answeredPrompt.isEmpty { closeText = "Answered “Quit anyway” for \(Fmt.list(r.quit.answeredPrompt))." }
+                                else if !r.quit.forced.isEmpty { closeText = "Closed \(Fmt.list(r.quit.forced)) by force." }
+                                else if !r.quit.closed.isEmpty { closeText = "Closed \(Fmt.list(r.quit.closed))." }
+                                if let closeText { liveText[.close] = closeText }
+                                liveText[.backup] = r.backup.map { "Saved as \($0.lastPathComponent)." }
+                                liveText[.copy] = r.plan.copies.isEmpty ? "Nothing needed copying." : "Copied \(Fmt.plural(r.plan.copies.count, "chat")). \(r.plan.targetName) has \(r.plan.totalAfter) now."
+                                if r.opened { liveText[.open] = r.openedRunning ? "\(r.plan.targetName) is open." : "Starting up. Give it a few seconds." }
+                                result = r
+                                withAnimation(.spring(duration: 0.45, bounce: 0.3)) { phase = .done }
+                                Haptic.done()
+                            case .failure(let error):
+                                failure = error.localizedDescription
+                                withAnimation { phase = .failed }
+                            }
+                        })
     }
 }
 
 /// Mochi in the switch sheet: ears perk up while it works, a happy hop when it's done.
 struct SwitchMochi: View {
     let phase: SwitchSheet.Phase
+    var size: CGFloat = 52
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hop = false
 
@@ -376,11 +353,11 @@ struct SwitchMochi: View {
             case .running where !reduceMotion:
                 TimelineView(.animation(minimumInterval: 1 / 30)) { tl in
                     let t = tl.date.timeIntervalSinceReferenceDate
-                    MochiFace(mood: .ready, size: 52, earTilt: sin(t * 9) * 9)
+                    MochiFace(mood: .ready, size: size, earTilt: sin(t * 9) * 9)
                 }
             case .done:
-                MochiFace(mood: .happy, size: 52)
-                    .offset(y: hop ? -10 : 0)
+                LiveMochi(mood: .happy, size: size)
+                    .offset(y: hop ? -size * 0.2 : 0)
                     .onAppear {
                         guard !reduceMotion else { return }
                         withAnimation(.spring(duration: 0.28, bounce: 0.5)) { hop = true }
@@ -389,9 +366,9 @@ struct SwitchMochi: View {
                         }
                     }
             case .failed:
-                MochiFace(mood: .tired, size: 52)
+                MochiFace(mood: .tired, size: size)
             default:
-                LiveMochi(mood: .ready, size: 52)
+                LiveMochi(mood: .ready, size: size)
             }
         }
         .transition(.scale(scale: 0.8).combined(with: .opacity))

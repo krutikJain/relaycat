@@ -206,6 +206,119 @@ final class AppModel: ObservableObject {
         request = SwitchRequest(target: folder, mode: mode)
     }
 
+    /// Runs a switch off the main thread and records it in Activity. Used by the switch sheet and the menu bar.
+    func performSwitch(target: String, mode: SourceMode, openAfter: Bool,
+                       onStep: @escaping @MainActor (SwitchStep, String) -> Void,
+                       onFinish: @escaping @MainActor (Result<SyncResult, Error>) -> Void) {
+        let scanner = scanner
+        let opts = SyncOptions(quitOthers: true, openAfter: openAfter)
+        let sourceName: String = {
+            if case .profile(let f) = mode { return snap?.profile(f)?.displayName ?? f }
+            return "wherever newest"
+        }()
+        working = true
+        Task.detached {
+            do {
+                let r = try SyncEngine.run(scanner: scanner, target: target, mode: mode, options: opts) { step, text in
+                    Task { @MainActor in onStep(step, text) }
+                }
+                await MainActor.run {
+                    self.working = false
+                    self.addHistory(HistoryEntry(date: Date(), kind: "switch", target: r.plan.targetName, source: sourceName,
+                                                 added: r.plan.added, updated: r.plan.updated, notes: r.plan.notes.count,
+                                                 quit: r.quit.closed, backup: r.backup?.path, ok: true,
+                                                 message: r.quit.forced.isEmpty ? "" : "Closed \(Fmt.list(r.quit.forced)) by force"))
+                    self.refresh()
+                    onFinish(.success(r))
+                }
+            } catch {
+                await MainActor.run {
+                    self.working = false
+                    self.addHistory(HistoryEntry(date: Date(), kind: "switch", target: self.snap?.profile(target)?.displayName ?? target,
+                                                 source: sourceName, added: 0, updated: 0, notes: 0, quit: [], backup: nil,
+                                                 ok: false, message: error.localizedDescription))
+                    self.refresh()
+                    onFinish(.failure(error))
+                }
+            }
+        }
+    }
+
+    // MARK: Switching from the menu bar
+
+    struct QuickSwitch: Equatable {
+        enum Phase: Equatable { case confirm, running, done, failed }
+        var target: String
+        var phase: Phase = .confirm
+        var step: SwitchStep?
+        var text = ""
+    }
+    enum QuickOutcome { case ok(String), failed(String) }
+    @Published var quickSwitch: QuickSwitch?
+    @Published var quickPlan: SyncPlan?
+    @Published var quickPlanError: String?
+    private var quickSwitchClear: Task<Void, Never>?
+
+    func toggleQuickSwitch(_ folder: String) {
+        guard !working else { return }
+        if quickSwitch?.target == folder, quickSwitch?.phase == .confirm { quickSwitch = nil; return }
+        quickSwitchClear?.cancel()
+        quickPlan = nil; quickPlanError = nil
+        if let snap {
+            do { quickPlan = try SyncEngine.plan(snap, target: folder, mode: .newestEverywhere) }
+            catch { quickPlanError = error.localizedDescription }
+        }
+        quickSwitch = QuickSwitch(target: folder)
+    }
+
+    func startQuickSwitch() {
+        guard var q = quickSwitch, q.phase == .confirm, !working else { return }
+        let name = snap?.profile(q.target)?.displayName ?? q.target
+        q.phase = .running; q.step = .close; q.text = "Closing Claude…"
+        quickSwitch = q
+        Haptic.tick()
+        let finish: @MainActor (QuickOutcome) -> Void = { [weak self] outcome in
+            guard let self, self.quickSwitch?.target == q.target else { return }
+            switch outcome {
+            case .ok(let text):
+                self.quickSwitch?.phase = .done; self.quickSwitch?.step = nil; self.quickSwitch?.text = text
+                Haptic.done()
+                self.quickSwitchClear = Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(5))
+                    guard !Task.isCancelled, self.quickSwitch?.phase == .done else { return }
+                    self.quickSwitch = nil
+                }
+            case .failed(let text):
+                self.quickSwitch?.phase = .failed; self.quickSwitch?.text = text
+            }
+        }
+        if isDemo {
+            let steps: [(SwitchStep, String, Double)] = [(.backup, "Backing up \(name)'s chats…", 0.7), (.copy, "Copying chats…", 1.5),
+                                                         (.open, "Opening \(name)…", 2.3)]
+            for (s, text, delay) in steps {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    self?.quickSwitch?.step = s; self?.quickSwitch?.text = text
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.1) { finish(.ok("Switched. \(name) is open.")) }
+            return
+        }
+        performSwitch(target: q.target, mode: .newestEverywhere, openAfter: openAfterSwitch,
+                      onStep: { [weak self] step, text in
+                          guard self?.quickSwitch?.phase == .running else { return }
+                          self?.quickSwitch?.step = step; self?.quickSwitch?.text = text
+                      },
+                      onFinish: { result in
+                          switch result {
+                          case .success(let r):
+                              let chats = r.plan.copies.isEmpty ? "Chats were already up to date." : "Brought \(Fmt.plural(r.plan.copies.count, "chat")) along."
+                              finish(.ok("Switched. \(r.opened ? "\(r.plan.targetName) is open. " : "")\(chats)"))
+                          case .failure(let e):
+                              finish(.failed(e.localizedDescription))
+                          }
+                      })
+    }
+
     func show(_ message: String) {
         toastTask?.cancel()
         withAnimation(.spring(duration: 0.35)) { toast = message }

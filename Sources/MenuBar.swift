@@ -7,10 +7,7 @@ struct MenuBarPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let open = m.snap?.runningProfiles.first {
-                summary(open)
-                Divider().padding(.horizontal, 14)
-            }
+            header
             Text("Switch to")
                 .font(.caption).foregroundStyle(.secondary)
                 .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 6)
@@ -21,10 +18,16 @@ struct MenuBarPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             } else if let snap = m.snap {
                 ForEach(snap.profiles) { p in
-                    Button { go(p) } label: { row(p, snap) }
-                        .buttonStyle(PressStyle())
-                        .disabled(p.targetDir == nil)
-                        .onHover { hovered = $0 ? p.folder : (hovered == p.folder ? nil : hovered) }
+                    VStack(spacing: 0) {
+                        Button { tap(p) } label: { row(p, snap) }
+                            .buttonStyle(PressStyle())
+                            .disabled(p.targetDir == nil || m.working)
+                            .onHover { hovered = $0 ? p.folder : (hovered == p.folder ? nil : hovered) }
+                        if let q = m.quickSwitch, q.target == p.folder, q.phase == .confirm {
+                            QuickSwitchCard(p: p, snap: snap, moreOptions: { go(p) })
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                    }
                 }
             } else {
                 ProgressView().frame(maxWidth: .infinity).padding()
@@ -39,12 +42,63 @@ struct MenuBarPanel: View {
             .padding(.horizontal, 14).padding(.vertical, 10)
         }
         .frame(width: 330)
+        .animation(.smooth(duration: 0.25), value: m.quickSwitch)
+    }
+
+    // MARK: Header
+
+    @ViewBuilder var header: some View {
+        if let q = m.quickSwitch, q.phase != .confirm {
+            progress(q)
+            Divider().padding(.horizontal, 14)
+        } else if let open = m.snap?.runningProfiles.first {
+            summary(open)
+            Divider().padding(.horizontal, 14)
+        }
+    }
+
+    func progress(_ q: AppModel.QuickSwitch) -> some View {
+        let name = m.snap?.profile(q.target)?.displayName ?? q.target
+        let steps = SwitchStep.allCases.count
+        let done = q.phase == .done ? steps : (q.step?.rawValue ?? 0)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                SwitchMochi(phase: q.phase == .running ? .running : q.phase == .done ? .done : .failed, size: 40)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(q.phase == .running ? "Switching to \(name)" : q.phase == .done ? "All set" : "The switch didn't finish")
+                        .font(.headline)
+                    Text(q.text).font(.caption).foregroundStyle(.secondary)
+                        .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.opacity)
+                }
+                Spacer(minLength: 0)
+            }
+            if q.phase != .failed {
+                HStack(spacing: 4) {
+                    ForEach(0..<steps, id: \.self) { i in
+                        Capsule()
+                            .fill(i < done || (i == done && q.phase == .running) ? Color.accentColor : Color.primary.opacity(0.12))
+                            .opacity(i == done && q.phase == .running ? 0.55 : 1)
+                            .frame(height: 4)
+                    }
+                }
+            } else {
+                HStack(spacing: 10) {
+                    Button("Try again") { m.quickSwitch?.phase = .confirm }.controlSize(.small)
+                    Button("Open Relaycat") { m.quickSwitch = nil; show() }.buttonStyle(.link).font(.callout)
+                    Spacer()
+                    Button("Dismiss") { m.quickSwitch = nil }.buttonStyle(.link).font(.callout)
+                }
+            }
+        }
+        .padding(14)
+        .transition(.opacity)
     }
 
     func summary(_ p: Profile) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                LiveMochi(mood: MochiMood.forLimits(p), size: 40)
+                LiveMochi(mood: MochiMood.forLimits(p), size: 40, lookingDown: hovered != nil)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(MochiMood.headline(p)).font(.headline)
                     Text(p.email ?? p.displayName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -78,8 +132,11 @@ struct MenuBarPanel: View {
         }
     }
 
+    // MARK: Rows
+
     func row(_ p: Profile, _ snap: Snapshot) -> some View {
-        HStack(spacing: 10) {
+        let expanded = m.quickSwitch?.target == p.folder && m.quickSwitch?.phase == .confirm
+        return HStack(spacing: 10) {
             Avatar(p: p, size: 26)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
@@ -97,10 +154,20 @@ struct MenuBarPanel: View {
                 .help(st.spoken)
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(hovered == p.folder ? Color.primary.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(expanded || hovered == p.folder ? Color.primary.opacity(expanded ? 0.09 : 0.07) : .clear,
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .padding(.horizontal, 4)
         .contentShape(Rectangle())
-        .help(p.running ? "\(p.displayName) is open" : "Switch to \(p.displayName)")
+        .help(p.running ? "Bring \(p.displayName) to the front" : "Switch to \(p.displayName)")
+    }
+
+    func tap(_ p: Profile) {
+        if p.running {
+            m.quickSwitch = nil
+            if let pid = p.pids.first { NSRunningApplication(processIdentifier: pid)?.activate() }
+            return
+        }
+        m.toggleQuickSwitch(p.folder)
     }
 
     func show() {
@@ -108,11 +175,78 @@ struct MenuBarPanel: View {
         AppLifecycle.showMainWindow()
     }
 
+    // The full switch sheet, for choosing where chats come from.
     func go(_ p: Profile) {
+        m.quickSwitch = nil
         show()
         m.sidebar = .page(.profiles)
         m.selected = p.folder
         m.requestSwitch(p.folder)
+    }
+}
+
+/// The inline confirm step in the menu bar panel: what the switch will do, then Switch or Cancel.
+struct QuickSwitchCard: View {
+    @EnvironmentObject var m: AppModel
+    let p: Profile
+    let snap: Snapshot
+    let moreOptions: () -> Void
+    var plan: SyncPlan? { m.quickPlan }
+    var planError: String? { m.quickPlanError }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let planError {
+                Text(planError).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+            } else if let plan {
+                VStack(alignment: .leading, spacing: 4) {
+                    line("power", plan.toQuit.isEmpty ? "No Claude is open right now." : "Closes \(Fmt.list(plan.toQuit.map(\.displayName))).")
+                    line("arrow.down.doc", plan.copies.isEmpty ? "Chats are already up to date." : "Brings \(Fmt.plural(plan.copies.count, "newer chat")) along, after a backup.")
+                    if let warning = limitWarning {
+                        line("gauge.with.dots.needle.0percent", warning, tint: .orange)
+                    }
+                    if let busy = plan.recentlyActive.first {
+                        line("exclamationmark.triangle.fill", "“\(busy.title)” was working \(Fmt.ago(busy.lastActivity)). It stops when Claude closes.", tint: .orange)
+                    }
+                    if !plan.keptDiverged.isEmpty {
+                        line("arrow.triangle.branch", "\(Fmt.plural(plan.keptDiverged.count, "chat")) went further in \(p.displayName), so \(plan.keptDiverged.count == 1 ? "it stays" : "they stay") as \(plan.keptDiverged.count == 1 ? "it is" : "they are").")
+                    }
+                }
+            } else {
+                ProgressView().controlSize(.small)
+            }
+            HStack(spacing: 8) {
+                Button("Switch") { m.startQuickSwitch() }
+                    .buttonStyle(.borderedProminent).controlSize(.small)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(plan == nil)
+                Button("Cancel") { m.quickSwitch = nil }
+                    .controlSize(.small)
+                    .keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("More options…", action: moreOptions).buttonStyle(.link).font(.caption)
+            }
+        }
+        .padding(.horizontal, 14).padding(.top, 6).padding(.bottom, 10)
+    }
+
+    // Switching to an account that's out of room is allowed, but worth saying.
+    var limitWarning: String? {
+        if let w = p.usage?.week, w.leftPct < 1 {
+            return "\(p.displayName)'s week is used up" + (w.resetsAt.map { ", back \(Fmt.when($0))." } ?? ".")
+        }
+        if let s = p.usage?.fiveHour, s.leftPct < 1 {
+            return "\(p.displayName)'s session is used up" + (s.resetsAt.map { ", back \(Fmt.when($0))." } ?? ".")
+        }
+        return nil
+    }
+
+    func line(_ icon: String, _ text: String, tint: Color = .secondary) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: icon).font(.caption).foregroundStyle(tint).frame(width: 14)
+            Text(text).font(.callout).foregroundStyle(tint == .secondary ? Color.primary : tint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
