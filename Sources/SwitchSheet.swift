@@ -244,6 +244,12 @@ struct SwitchSheet: View {
     }
 
     @ViewBuilder func warnings(_ p: SyncPlan) -> some View {
+        if !p.keptDiverged.isEmpty {
+            Text(p.keptDiverged.count == 1
+                 ? "“\(p.keptDiverged[0])” went further in \(name) than in the other copy, so it stays as it is."
+                 : "\(Fmt.plural(p.keptDiverged.count, "chat")) went further in \(name) than in the other copies, so they stay as they are.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
         if !p.keptNewer.isEmpty {
             Text("\(Fmt.plural(p.keptNewer.count, "chat")) in \(name) \(p.keptNewer.count == 1 ? "is" : "are") newer than that copy, so \(p.keptNewer.count == 1 ? "it stays" : "they stay") as \(p.keptNewer.count == 1 ? "it is" : "they are").")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

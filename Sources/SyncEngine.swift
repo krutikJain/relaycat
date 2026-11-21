@@ -22,6 +22,7 @@ struct SyncPlan {
     var copies: [PlannedCopy] = []
     var alreadyCurrent = 0
     var keptNewer: [String] = []
+    var keptDiverged: [String] = []
     var notes: [PlannedNote] = []
     var missingParents: [String] = []
     var toQuit: [Profile] = []
@@ -81,7 +82,7 @@ enum SyncEngine {
         for p in sources {
             var pool = p.chats
             if case .profile = mode, p.folder == target { pool = Array(t.ownChats.values) }
-            for c in pool where best[c.id].map({ c.lastActivity > $0.lastActivity }) ?? true { best[c.id] = c }
+            for c in pool where best[c.id].map({ $0.isBehind(c) }) ?? true { best[c.id] = c }
         }
         plan.newest = best.values.max { $0.lastActivity < $1.lastActivity }
 
@@ -89,7 +90,8 @@ enum SyncEngine {
             let dest = tDir.appendingPathComponent(sid + ".json")
             if b.path.standardizedFileURL.path == dest.standardizedFileURL.path { plan.alreadyCurrent += 1; continue }
             if let mine = t.ownChats[sid] {
-                if mine.lastActivity >= b.lastActivity { plan.alreadyCurrent += 1; continue }
+                if mine.diverged(from: b) { plan.keptDiverged.append(mine.title); continue }
+                if !mine.canBeReplaced(by: b) { plan.alreadyCurrent += 1; continue }
                 plan.copies.append(PlannedCopy(id: sid, title: b.title, from: b.profileFolder, src: b.path, dest: dest, kind: .updated, lastActivity: b.lastActivity))
             } else {
                 plan.copies.append(PlannedCopy(id: sid, title: b.title, from: b.profileFolder, src: b.path, dest: dest, kind: .added, lastActivity: b.lastActivity))
@@ -97,8 +99,8 @@ enum SyncEngine {
         }
         if case .profile(let f) = mode {
             for (sid, mine) in t.ownChats {
-                if let theirs = snap.profile(f)?.chats.filter({ $0.id == sid }).max(by: { $0.lastActivity < $1.lastActivity }),
-                   mine.lastActivity > theirs.lastActivity { plan.keptNewer.append(mine.title) }
+                if let theirs = snap.profile(f)?.chats.filter({ $0.id == sid }).max(by: { $0.isBehind($1) }),
+                   theirs.isBehind(mine), !plan.keptDiverged.contains(mine.title) { plan.keptNewer.append(mine.title) }
             }
         }
         plan.copies.sort { $0.lastActivity > $1.lastActivity }

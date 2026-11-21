@@ -135,7 +135,7 @@ final class Scanner {
         for p in profiles {
             for c in p.chats {
                 guard let cur = newest[c.id] else { newest[c.id] = c; continue }
-                if c.lastActivity > cur.lastActivity || (c.lastActivity == cur.lastActivity && rank(c) > rank(cur)) {
+                if cur.isBehind(c) || (!c.isBehind(cur) && rank(c) > rank(cur)) {
                     newest[c.id] = c
                 }
             }
@@ -143,7 +143,7 @@ final class Scanner {
         var behind: [String: Int] = [:]
         for p in profiles {
             behind[p.folder] = newest.values.reduce(0) { n, c in
-                if let mine = p.ownChats[c.id], mine.lastActivity >= c.lastActivity { return n }
+                if let mine = p.ownChats[c.id], !mine.canBeReplaced(by: c) { return n }
                 return n + 1
             }
         }
@@ -157,7 +157,7 @@ final class Scanner {
             h.combine(p.pids); h.combine(p.usage); h.combine(p.ownChats.count); h.combine(behind[p.folder])
             h.combine(p.history.count); h.combine(p.shortcutApp)
         }
-        for c in newest.values { h.combine(c.id); h.combine(c.lastActivity); h.combine(c.title); h.combine(c.profileFolder) }
+        for c in newest.values { h.combine(c.id); h.combine(c.lastActivity); h.combine(c.lastTurn); h.combine(c.turns); h.combine(c.title); h.combine(c.profileFolder) }
         h.combine(live.values.compactMap(\.fetchedAt).max())
         h.combine(Int(Date().timeIntervalSince1970 / 60))
 
@@ -190,12 +190,16 @@ final class Scanner {
         if let d = readJSON(url) as? [String: Any], let sid = d["sessionId"] as? String {
             let ms = (d["lastActivityAt"] as? NSNumber)?.doubleValue ?? (d["createdAt"] as? NSNumber)?.doubleValue ?? 0
             let spawned = (d["spawnedFrom"] as? [String: Any])?["sessionId"] as? String
+            let turnMs = ["lastTurnEdgeAt", "latestUserFrameAt"].compactMap { (d[$0] as? NSNumber)?.doubleValue }.max()
             rec = ChatRecord(id: sid, title: (d["title"] as? String) ?? "Untitled",
                              lastActivity: Date(timeIntervalSince1970: ms / 1000),
                              cwd: (d["originCwd"] as? String) ?? (d["cwd"] as? String),
                              archived: (d["isArchived"] as? Bool) ?? false,
                              parentId: (d["forkedFromSessionId"] as? String) ?? spawned,
-                             path: url, profileFolder: folder)
+                             path: url, profileFolder: folder,
+                             lastTurn: Date(timeIntervalSince1970: (turnMs ?? ms) / 1000),
+                             turns: (d["completedTurns"] as? NSNumber)?.intValue ?? 0,
+                             transcript: d["cliSessionId"] as? String)
         }
         chatCache[url.path] = (mtime, rec)
         return rec

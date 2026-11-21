@@ -31,6 +31,29 @@ struct ChatRecord: Identifiable, Hashable {
     var parentId: String?
     var path: URL
     var profileFolder: String
+    // When the conversation itself last moved (a message sent or a turn finished), and how many turns it has.
+    // lastActivity also moves for notifications, focus and background agents, so it can't say which copy is ahead.
+    var lastTurn: Date = .distantPast
+    var turns = 0
+    var transcript: String?
+
+    // Copies of one chat in different profiles, ordered by how far the conversation got.
+    func isBehind(_ other: ChatRecord) -> Bool {
+        if lastTurn != other.lastTurn { return lastTurn < other.lastTurn }
+        if turns != other.turns { return turns < other.turns }
+        return lastActivity < other.lastActivity
+    }
+
+    // Whether `other` can replace this copy without losing any of the conversation.
+    // Turn counts only grow, so a copy with fewer turns is an older or split-off version.
+    func canBeReplaced(by other: ChatRecord) -> Bool {
+        isBehind(other) && other.turns >= turns
+    }
+
+    // Ahead on one count and behind on the other: the two copies went separate ways.
+    func diverged(from other: ChatRecord) -> Bool {
+        isBehind(other) && other.turns < turns
+    }
 
     var project: String {
         guard let cwd, !cwd.isEmpty else { return "" }

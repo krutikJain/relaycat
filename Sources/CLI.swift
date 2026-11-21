@@ -110,6 +110,8 @@ enum CLI {
                     let p = try SyncEngine.plan(snap, target: target, mode: mode)
                     print("plan into \(p.targetName): add \(p.added) update \(p.updated) current \(p.alreadyCurrent) notes \(p.notes.count) total after \(p.totalAfter)")
                     print("quit: \(p.toQuit.map(\.displayName))  recently active: \(p.recentlyActive.map(\.title))")
+                    for c in p.copies { print("  \(c.kind.rawValue): \(c.title) from \(c.from)") }
+                    for t in p.keptDiverged { print("  kept, went further here: \(t)") }
                 }
             } catch { print("error:", error.localizedDescription) }
         }
