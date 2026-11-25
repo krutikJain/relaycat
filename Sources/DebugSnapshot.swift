@@ -192,6 +192,43 @@ enum DebugSnapshot {
             }
             return
         }
+        // A short recording of the menu bar panel: open it, pick an account, switch (demo data only).
+        if let dir = env["RELAYCAT_REEL"] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                Task { @MainActor in
+                    func buttons(_ v: NSView) -> [NSButton] { (v as? NSButton).map { [$0] } ?? [] + v.subviews.flatMap(buttons) }
+                    for w in NSApp.windows where String(describing: type(of: w)).contains("StatusBar") {
+                        if let b = w.contentView.map(buttons)?.first { b.performClick(nil) }
+                    }
+                    try? await Task.sleep(for: .seconds(1.2))
+                    let target = m.snap?.suggestion?.folder ?? m.snap?.profiles.first(where: { !$0.running })?.folder ?? ""
+                    let script: [(Double, () -> Void)] = [
+                        (2.2, { m.toggleQuickSwitch(target) }),
+                        (4.6, { m.startQuickSwitch() }),
+                    ]
+                    for (t, action) in script { DispatchQueue.main.asyncAfter(deadline: .now() + t) { action() } }
+                    let start = Date()
+                    var n = 0
+                    while Date().timeIntervalSince(start) < 10.5 {
+                        guard #available(macOS 14.4, *), let content = try? await SCShareableContent.currentProcess,
+                              let w = content.windows.filter({ $0.isOnScreen && $0.frame.width > 250 && $0.frame.width < 420 }).first else {
+                            try? await Task.sleep(for: .milliseconds(60)); continue
+                        }
+                        let cfg = SCStreamConfiguration()
+                        cfg.width = Int(w.frame.width * 2); cfg.height = Int(w.frame.height * 2); cfg.showsCursor = false
+                        if let img = try? await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: w), configuration: cfg) {
+                            let rep = NSBitmapImageRep(cgImage: img)
+                            let ms = Int(Date().timeIntervalSince(start) * 1000)
+                            try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: String(format: "%@/f%04d-%05d.png", dir, n, ms)))
+                            n += 1
+                        }
+                        try? await Task.sleep(for: .milliseconds(40))
+                    }
+                    AppLifecycle.quitCompletely()
+                }
+            }
+            return
+        }
         if let dir = env["RELAYCAT_POSES"] {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {

@@ -41,6 +41,10 @@ You hit the 5-hour limit on one Claude account in the middle of something. You h
 
 Relaycat does that in one click. It closes the Claude that's open, copies the newest version of every chat into the account you're switching to, and opens it. A backup is saved first, every time.
 
+<div align="center">
+<img src="docs/images/menubar-switch.gif" alt="Switching Claude accounts from the Relaycat menu bar: pick an account, see what will happen, press Switch, and Mochi does the rest" width="420" />
+</div>
+
 ## What it does
 
 | Feature | What it means |
